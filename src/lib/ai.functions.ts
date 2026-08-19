@@ -102,8 +102,10 @@ Current date and time (UTC): ${new Date().toISOString()}`;
 
       let payload: {
         choices?: Array<{
+          finish_reason?: string;
           message?: {
             content?: string | null;
+            reasoning?: string | null;
             tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>;
           };
         }>;
@@ -114,14 +116,32 @@ Current date and time (UTC): ${new Date().toISOString()}`;
         throw new Error("Nexus received a malformed reply from its AI core. Please try again.");
       }
 
-      const message = payload.choices?.[0]?.message;
+      const choice = payload.choices?.[0];
+      const message = choice?.message;
       const toolCalls = message?.tool_calls ?? [];
 
       if (toolCalls.length === 0) {
-        const text = message?.content?.trim();
-        if (!text) throw new Error("Nexus's AI core returned an empty response. Please try again.");
-        return { text, mutated };
+        const text = message?.content?.trim() || message?.reasoning?.trim();
+        if (text) return { text, mutated };
+
+        // Some models occasionally return an empty turn (often after tool
+        // results, or when the output budget was spent on reasoning). Nudge
+        // once with a real user turn instead of failing the whole request.
+        console.warn("Nexus AI empty turn", { step, finish_reason: choice?.finish_reason });
+        if (emptyTurns >= 1) {
+          return {
+            text: "I wasn't able to put together an answer for that. Could you try rephrasing it?",
+            mutated,
+          };
+        }
+        emptyTurns += 1;
+        messages.push({
+          role: "user",
+          content: "Please give your answer now as plain text.",
+        });
+        continue;
       }
+
 
 
       messages.push({
