@@ -14,6 +14,14 @@ export async function runTool(
   args: unknown,
   ctx: ToolContext,
 ): Promise<ToolResult> {
+  // Tools discovered from the n8n MCP server are executed through the MCP
+  // client rather than a locally registered executor.
+  const { isN8nToolName, runN8nMcpTool } = await import("./mcp/n8n.server");
+  if (isN8nToolName(name)) {
+    console.log(`[nexus-tools] AI selected MCP tool "${name}"`);
+    return (await runN8nMcpTool(name, args)) as ToolResult;
+  }
+
   const executor = toolRegistry[name];
   if (!executor) return { ok: false, error: `Unknown tool: ${name}` };
   try {
