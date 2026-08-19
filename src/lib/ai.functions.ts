@@ -61,6 +61,7 @@ Current date and time (UTC): ${new Date().toISOString()}`;
     ];
 
     let mutated = false;
+    let emptyTurns = 0;
 
     for (let step = 0; step < 6; step += 1) {
       let response: Response;
