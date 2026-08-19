@@ -72,6 +72,8 @@ function AutomationsPage() {
         }
       />
 
+      <N8nStatusPanel />
+
       <div className="grid gap-4 xl:grid-cols-2">
         {automations.map((automation, index) => (
           <GlassPanel key={automation.name} className="p-5">
