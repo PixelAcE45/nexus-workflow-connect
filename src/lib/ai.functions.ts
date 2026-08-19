@@ -72,7 +72,7 @@ Current date and time (UTC): ${new Date().toISOString()}`;
         body: JSON.stringify({
           model: provider.model,
           messages,
-          tools: toolDeclarations,
+          tools: activeTools,
           max_tokens: 1200,
         }),
       });
