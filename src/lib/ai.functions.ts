@@ -18,8 +18,24 @@ export const nexusChat = createServerFn({ method: "POST" })
 
     const { toolDeclarations, MUTATING_TOOLS } = await import("./ai/tool-schemas");
     const { runTool } = await import("./ai/registry.server");
+    const { getN8nMcpState, n8nToolDeclarations } = await import("./ai/mcp/n8n.server");
     const toolCtx = { supabase: context.supabase, userId: context.userId };
 
+    // Real tools discovered from the connected n8n MCP server (empty when the
+    // server is unconfigured or unreachable — the rest of Nexus is unaffected).
+    const mcpState = await getN8nMcpState();
+    const mcpDeclarations = n8nToolDeclarations(mcpState);
+    const activeTools = [...toolDeclarations, ...mcpDeclarations];
+
+    const n8nSection =
+      mcpState.status === "CONNECTED" && mcpState.tools.length > 0
+        ? `\n\nConnected automation platform: n8n (via MCP). You can run these real n8n tools: ${mcpState.tools
+            .map((tool) => tool.aiName)
+            .join(", ")}.
+- Use them when the user asks about workflows, automations, executions or anything the tool descriptions cover.
+- Never invent workflow names, run history or results — call the tool and report what it returned.
+- If an n8n tool fails, say plainly that the n8n connection or the workflow failed and what the error said.`
+        : `\n\nn8n automations are not available right now (status: ${mcpState.status}). If the user asks you to run or inspect an n8n workflow, say the n8n connection is not active instead of pretending to run anything.`;
 
     const systemPrompt = `You are Nexus, a calm and precise AI operating system for knowledge work, and an active co-pilot inside the user's Nexus workspace.
 
@@ -31,9 +47,9 @@ Rules:
 - Never invent workspace data. Call list_tasks or get_workspace_summary before answering questions about progress, priorities or what is pending.
 - If required information is missing (for example a task description), ask one short clarifying question instead of inventing it.
 - Use the conversation so far to resolve references like "it" or "that task".
-- The only connected data source today is tasks. If asked about email, calendar, files or notes, say those are not connected yet.
+- The connected data sources are tasks and, when active, n8n automations. If asked about email, calendar, files or notes, say those are not connected yet.
 - Never reveal keys, ids or technical internals unless the user needs an id.
-- Do not end replies with "Would you like me to help with anything else?".
+- Do not end replies with "Would you like me to help with anything else?".${n8nSection}
 
 Formatting: reply in Markdown. Never answer with one long unbroken paragraph — use short paragraphs, and lists, short headings, bold emphasis or fenced code blocks when they genuinely help. Keep confirmations to one or two sentences.
 
