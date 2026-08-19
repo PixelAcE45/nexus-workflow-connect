@@ -3,6 +3,7 @@ import { ArrowRight, Plus, Workflow } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { GlassPanel, IconTile, PageHeader, SectionTitle } from "@/components/nexus/glass";
+import { N8nStatusPanel } from "@/components/nexus/n8n-status";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 
