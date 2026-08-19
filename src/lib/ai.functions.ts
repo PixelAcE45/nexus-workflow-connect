@@ -63,29 +63,44 @@ Current date and time (UTC): ${new Date().toISOString()}`;
     let mutated = false;
 
     for (let step = 0; step < 6; step += 1) {
-      const response = await fetch(provider.url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${provider.apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: provider.model,
-          messages,
-          tools: activeTools,
-          max_tokens: 1200,
-        }),
-      });
-
-
-      if (!response.ok) {
-        const detail = await response.text();
-        if (response.status === 429) throw new Error("Rate limited by the AI provider. Try again shortly.");
-        if (response.status === 402) throw new Error("The AI provider reports no remaining credits.");
-        throw new Error(`AI request failed (${response.status}): ${detail.slice(0, 300)}`);
+      let response: Response;
+      try {
+        response = await fetch(provider.url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${provider.apiKey}`,
+            "Content-Type": "application/json",
+            ...provider.headers,
+          },
+          body: JSON.stringify({
+            model: provider.model,
+            messages,
+            tools: activeTools,
+            temperature: provider.temperature,
+            max_tokens: provider.maxOutputTokens,
+          }),
+        });
+      } catch {
+        throw new Error("Nexus temporarily couldn't reach its AI core. Please try again.");
       }
 
-      const payload = (await response.json()) as {
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        console.error("Nexus AI request failed", response.status, detail.slice(0, 500));
+        if (response.status === 401 || response.status === 403)
+          throw new Error("Nexus can't authenticate with its AI core right now.");
+        if (response.status === 400 || response.status === 404)
+          throw new Error("Nexus's AI core rejected that request. Please try rephrasing.");
+        if (response.status === 413 || /context|too long|max.*tokens/i.test(detail))
+          throw new Error("That conversation is too long for Nexus. Start a new chat and try again.");
+        if (response.status === 429)
+          throw new Error("Nexus's AI core is rate limited. Try again in a moment.");
+        if (response.status === 402)
+          throw new Error("Nexus's AI core has no remaining credits.");
+        throw new Error("Nexus temporarily couldn't reach its AI core. Please try again.");
+      }
+
+      let payload: {
         choices?: Array<{
           message?: {
             content?: string | null;
@@ -93,15 +108,21 @@ Current date and time (UTC): ${new Date().toISOString()}`;
           };
         }>;
       };
+      try {
+        payload = await response.json();
+      } catch {
+        throw new Error("Nexus received a malformed reply from its AI core. Please try again.");
+      }
 
       const message = payload.choices?.[0]?.message;
       const toolCalls = message?.tool_calls ?? [];
 
       if (toolCalls.length === 0) {
         const text = message?.content?.trim();
-        if (!text) throw new Error("The AI returned an empty response.");
+        if (!text) throw new Error("Nexus's AI core returned an empty response. Please try again.");
         return { text, mutated };
       }
+
 
       messages.push({
         role: "assistant",
